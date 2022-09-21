@@ -19,6 +19,7 @@ class States(Enum):
     USER_FULLNAME = auto()
     USER_PHONE_NUMBER = auto()
     MAIN_MENU = auto()
+    CATEGORY = auto()
 
 
 logger = logging.getLogger(__name__)
@@ -175,6 +176,29 @@ def get_user_phone_number(update: Update, context: CallbackContext) -> States:
     update.message.reply_text(error_registration_msg)
 
 
+def categories_keyboard(update: Update, context: CallbackContext) -> States:
+    """
+    Отрисовываем клавиатуру с рецептами
+    """
+    message_keyboard = [["Веганство", "Спортивное"],
+                        ["Диетическое", "Без калорий"],
+                        ["Случайный рецепт"],
+                        ]
+    markup = ReplyKeyboardMarkup(message_keyboard,
+                                 resize_keyboard=True,
+                                 one_time_keyboard=True)
+    categories_msg = dedent("""\
+            Выберите из какой категории вы хотели бы получить рецепт.
+            
+            Чтобы вернуться в главное меню нажмите /start
+            """).replace("  ", "")
+    update.message.reply_text(categories_msg, reply_markup=markup)
+    return States.CATEGORY
+
+def show_recipe(update: Update, context: CallbackContext):
+    update.message.reply_text("Пока здесь ничего нет")
+
+
 if __name__ == '__main__':
     env = environs.Env()
     env.read_env()
@@ -197,7 +221,7 @@ if __name__ == '__main__':
                 ),
                 MessageHandler(
                     Filters.text("❌ Не согласен"), cancel_agreement
-                )
+                ),
             ],
             States.START_REGISTRATION: [
                 MessageHandler(
@@ -210,6 +234,31 @@ if __name__ == '__main__':
                 ),
                 MessageHandler(
                     Filters.contact, get_user_phone_number
+                )
+            ],
+            States.MAIN_MENU: [
+                MessageHandler(
+                    Filters.text("🍳 Рецепты"), categories_keyboard
+                ),
+                MessageHandler(
+                    Filters.text("🙇🏻 Личный кабинет"), show_recipe
+                )
+            ],
+            States.CATEGORY: [
+                MessageHandler(
+                    Filters.text("Веганство"), show_recipe
+                ),
+                MessageHandler(
+                    Filters.text("Спортивное"), show_recipe
+                ),
+                MessageHandler(
+                    Filters.text("Диетическое"), show_recipe
+                ),
+                MessageHandler(
+                    Filters.text("Без калорий"), show_recipe
+                ),
+                MessageHandler(
+                    Filters.text("Случайный рецепт"), show_recipe
                 )
             ]
         },
