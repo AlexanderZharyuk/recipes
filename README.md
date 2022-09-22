@@ -23,7 +23,9 @@ python3 recipes_admin_api/manage.py migrate
 Запуск происходит следующими командами:
 ```shell
 python3 recipes_admin_api/manage.py runserver
-python3 bot/main.py
+
+cd bot
+python3 main.py
 ```
 
 # Бизнес-логика бота
