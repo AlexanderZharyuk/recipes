@@ -5,12 +5,14 @@ from enum import Enum, auto
 
 import environs
 import requests
+import phonenumbers
 
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, Update,
                       ReplyKeyboardMarkup, KeyboardButton)
 from telegram.ext import (CallbackQueryHandler, CallbackContext,
                           CommandHandler, ConversationHandler,
                           MessageHandler, Filters, Updater)
+from telegram import ParseMode
 from more_itertools import chunked
 
 
@@ -112,8 +114,16 @@ def get_user_fullname(update: Update, context: CallbackContext) -> States:
     Записываем имя пользователя во временный словарь context.user_data для
     будущей записи в БД.
     """
-    # TODO Сделать проверку на валидность введенного имени
-    context.user_data["fullname"] = update.message.text
+    words_in_user_answer = len(update.message.text.split())
+    if words_in_user_answer == 1 or words_in_user_answer > 2:
+        update.message.reply_text(dedent("""\
+        Некорректный ввод. Может вы забыли указать фамилию?
+        
+        Попробуйте еще раз:
+        """))
+        return States.START_REGISTRATION
+
+    context.user_data["fullname"] = update.message.text.title()
 
     message_keyboard = [
         [
@@ -128,9 +138,13 @@ def get_user_fullname(update: Update, context: CallbackContext) -> States:
         resize_keyboard=True)
 
     update.message.reply_text(
-        f'📱 Введите ваш номер телефона в формате +7... '
-        f'или нажав на кнопку ниже:',
-        reply_markup=markup)
+        dedent("""\
+        📱 Введите ваш номер телефона в формате \
+        <code>+7999-111-22-33</code> или нажмите на кнопку ниже:
+        """).replace("  ", ""),
+        reply_markup=markup,
+        parse_mode=ParseMode.HTML
+    )
     return States.USER_PHONE_NUMBER
 
 
@@ -140,11 +154,29 @@ def get_user_phone_number(update: Update, context: CallbackContext) -> States:
     Если телефон валидный - отправляем запрос к БД, сохраняем юзера и
     перекидываем в главное меню
     """
-    # TODO Сделать проверку на валидность введенного телефона
-    context.user_data["phone_number"] = update.message.text
-
     if update.message.contact:
         context.user_data["phone_number"] = update.message.contact.phone_number
+    else:
+        phone_number = phonenumbers.parse(update.message.text, "RU")
+        if not phonenumbers.is_valid_number(phone_number):
+            message_keyboard = [
+                [
+                    KeyboardButton(
+                        'Отправить свой номер телефона',
+                        request_contact=True)
+                ]
+            ]
+            markup = ReplyKeyboardMarkup(
+                message_keyboard,
+                one_time_keyboard=True,
+                resize_keyboard=True)
+            error_message = dedent("""\
+            Введенный номер некорректен. Попробуйте снова:
+            """)
+            update.message.reply_text(error_message, reply_markup=markup)
+            return States.USER_PHONE_NUMBER
+
+        context.user_data["phone_number"] = update.message.text
 
     user_telegram_id = update.message.from_user.id
     url = f"http://127.0.0.1:8000/api/users/add/"
