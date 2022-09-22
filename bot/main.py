@@ -1,7 +1,9 @@
+import json
 import logging
 
 from textwrap import dedent
 from enum import Enum, auto
+from pprint import pprint
 
 import environs
 import requests
@@ -20,6 +22,7 @@ class States(Enum):
     USER_PHONE_NUMBER = auto()
     MAIN_MENU = auto()
     CATEGORY = auto()
+    RECIPE = auto()
 
 
 logger = logging.getLogger(__name__)
@@ -43,7 +46,7 @@ def start(update: Update, context: CallbackContext) -> States:
                                      one_time_keyboard=True)
         menu_msg = dedent(f"""\
         Здравствуй, {user_fullname}!
-        
+
         Найдем новые рецепты или приготовим, что уже пробовали?
         """)
         update.message.reply_text(text=menu_msg, reply_markup=markup)
@@ -59,10 +62,10 @@ def start(update: Update, context: CallbackContext) -> States:
 
     greeting_msg = dedent("""\
     Привет!✌️
-    
+
     Для того, чтобы использовать нашего бота - вам необходимо дать согласие \
     на обработку данных. 
-    
+
     Это обязательная процедура, пожалуйста, ознакомьтесь с документом.
     """).replace("  ", "")
     update.message.reply_document(user_agreement_pdf,
@@ -80,7 +83,7 @@ def cancel_agreement(update: Update, context: CallbackContext) -> States:
     response_msg = dedent("""\
     К сожалению, тогда мы не сможем дать вам возможность пользоваться нашим \
     ботом. 
-    
+
     Если вы передумали - нажмите на кнопку согласия ниже.
     """).replace("  ", "")
 
@@ -161,10 +164,10 @@ def get_user_phone_number(update: Update, context: CallbackContext) -> States:
                                      one_time_keyboard=True)
         end_registration_msg = dedent("""\
         🎉 Регистрация прошла успешно! 
-        
+
         🍳 Для того, чтобы найти новые рецепты - используйте кнопку с \
         рецептами снизу. 
-        
+
         🙇🏻 В вашем личном кабинете будут рецепты, которые вы лайкните.
         """).replace("  ", "")
         update.message.reply_text(end_registration_msg, reply_markup=markup)
@@ -189,14 +192,31 @@ def categories_keyboard(update: Update, context: CallbackContext) -> States:
                                  one_time_keyboard=True)
     categories_msg = dedent("""\
             Выберите из какой категории вы хотели бы получить рецепт.
-            
+
             Чтобы вернуться в главное меню нажмите /start
             """).replace("  ", "")
     update.message.reply_text(categories_msg, reply_markup=markup)
     return States.CATEGORY
 
+
 def show_recipe(update: Update, context: CallbackContext):
-    update.message.reply_text("Пока здесь ничего нет")
+    with open('documents/params.json', 'r', encoding='CP1251') as file:
+        contents = json.load(file)
+    category = update.message.text
+    message_keyboard = [["Лайк", "Дизлайк"],
+                        ["Назад"],
+                        ]
+    markup = ReplyKeyboardMarkup(message_keyboard,
+                                 resize_keyboard=True,
+                                 one_time_keyboard=True)
+    categories_msg = dedent(f"""\
+                Категория - {category}
+                Название - {contents["access"][1]}
+                Картинка - {contents["access"][2]}
+                Ингредиенты - {contents["trunk"][3]}
+                """).replace("  ", "")
+    update.message.reply_text(categories_msg, reply_markup=markup)
+    return States.RECIPE
 
 
 if __name__ == '__main__':
@@ -260,6 +280,17 @@ if __name__ == '__main__':
                 MessageHandler(
                     Filters.text("Случайный рецепт"), show_recipe
                 )
+            ],
+            States.RECIPE: [
+                MessageHandler(
+                    Filters.text("Лайк"), show_recipe
+                ),
+                MessageHandler(
+                    Filters.text("Дизлайк"), show_recipe
+                ),
+                MessageHandler(
+                    Filters.text("Назад"), start
+                ),
             ]
         },
         fallbacks=[],
