@@ -11,6 +11,7 @@ from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, Update,
 from telegram.ext import (CallbackQueryHandler, CallbackContext,
                           CommandHandler, ConversationHandler,
                           MessageHandler, Filters, Updater)
+from more_itertools import chunked
 
 
 class States(Enum):
@@ -180,22 +181,30 @@ def categories_keyboard(update: Update, context: CallbackContext) -> States:
     """
     Отрисовываем клавиатуру с рецептами
     """
-    message_keyboard = [["Веганство", "Спортивное"],
-                        ["Диетическое", "Без калорий"],
-                        ["Случайный рецепт"],
-                        ]
+    # TODO Получить этот список через API
+    categories = [
+        "Веганство",
+        "Спортивное",
+        "Диетическое",
+        "Без калорий",
+        "Случайный рецепт",
+        "Главное меню"
+    ]
+    message_keyboard = list(chunked(categories, 2))
     markup = ReplyKeyboardMarkup(message_keyboard,
                                  resize_keyboard=True,
                                  one_time_keyboard=True)
     categories_msg = dedent("""\
             Выберите из какой категории вы хотели бы получить рецепт.
-            
-            Чтобы вернуться в главное меню нажмите /start
-            """).replace("  ", "")
+            """)
     update.message.reply_text(categories_msg, reply_markup=markup)
     return States.CATEGORY
 
+
 def show_recipe(update: Update, context: CallbackContext):
+    """
+    Показываем пользователю рецепт из определенной категории
+    """
     update.message.reply_text("Пока здесь ничего нет")
 
 
@@ -259,6 +268,9 @@ if __name__ == '__main__':
                 ),
                 MessageHandler(
                     Filters.text("Случайный рецепт"), show_recipe
+                ),
+                MessageHandler(
+                    Filters.text("Главное меню"), start
                 )
             ]
         },
