@@ -3,6 +3,7 @@ import logging
 
 from textwrap import dedent
 from enum import Enum, auto
+from pprint import pprint
 
 import environs
 import requests
@@ -277,14 +278,20 @@ def show_recipe(update: Update, context: CallbackContext) -> States:
     recipe_description = random_recipe["recipe_description"]
     # TODO Использовать этот URL для отправки картинки пользователю
     recipe_photo_url = random_recipe["recipe_photo"]
+    response = requests.get(recipe_photo_url)
+    response.raise_for_status()
+    # with open('recipe_image.jpg', 'wb') as file:
+    #     file.write(response.content)
+    # recipe_image = open('recipe_image.jpg', 'wb').read()
+
     recipe_ingredients = [
         f"- {ingredient}" for ingredient in random_recipe["recipe_ingredients"]
     ]
     formatted_ingredients = '\n'.join(recipe_ingredients)
 
     recipe_message = dedent(f"""\
-    <b>{recipe_name}</b>
-    
+    {recipe_name}
+         
     <b>Описание:</b>
     {recipe_description} 
     
@@ -293,7 +300,20 @@ def show_recipe(update: Update, context: CallbackContext) -> States:
     """).replace("  ", "")
 
     # TODO Сделать клавиатуру Лайк/Дизлайк/Главное меню
-    update.message.reply_text(recipe_message, parse_mode=ParseMode.HTML)
+
+    # message_keyboard = [['✅ Лайк', '❌ Дизлайк'],
+    #                     ['Главное меню']
+    #                     ]
+    message_keyboard = [
+        [InlineKeyboardButton('✅ Лайк', callback_data=f'Like'), InlineKeyboardButton('❌ Дизлайк',
+                                                                                        callback_data='Dislike')],
+        [InlineKeyboardButton('Меню категорий', callback_data='Categories_menu')]
+        ]
+
+    update.message.reply_photo(response.content,
+                                  caption=recipe_message,
+                                  reply_markup=InlineKeyboardMarkup(message_keyboard),
+                                  parse_mode=ParseMode.HTML)
     return States.RECIPE
 
 
@@ -308,7 +328,9 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
         recipe = response.json()
         recipe_name = recipe["recipe_name"]
         recipe_description = recipe["recipe_description"]
-        recipe_image = recipe["recipe_image"]
+        recipe_image_url = recipe["recipe_image"]
+        response = requests.get(recipe_image_url)
+        response.raise_for_status()
         recipe_ingredients = [
             f"- {ingredient}" for ingredient in
             recipe["recipe_ingredients"]
@@ -326,8 +348,16 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
         """).replace("  ", "")
 
         # TODO Сделать клавиатуру Лайк/Дизлайк/Главное меню
-        update.message.reply_text(recipe_message, parse_mode=ParseMode.HTML)
-        return
+        message_keyboard = [
+            [InlineKeyboardButton('✅ Лайк', callback_data=f'Like'), InlineKeyboardButton('❌ Дизлайк',
+                                                                                         callback_data='Dislike')],
+            [InlineKeyboardButton('Меню категорий', callback_data='Categories_menu')]
+        ]
+        update.message.reply_photo(response.content,
+                                   caption=recipe_message,
+                                   reply_markup=InlineKeyboardMarkup(message_keyboard),
+                                   parse_mode=ParseMode.HTML)
+        return States.RECIPE
 
     message_keyboard = [["Назад", "Главное меню"]]
     markup = ReplyKeyboardMarkup(message_keyboard,
@@ -339,6 +369,28 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
     )
     return States.CATEGORY
 
+def like(update: Update, context: CallbackContext) -> States:
+    url = "http://127.0.0.1:8000/api/favourites/add/"
+    recipe_name = ''
+    payload = {
+        'user_tg_id': update.message.from_user.id,
+        'recipe_name': recipe_name
+    }
+    response = requests.post(url, data=payload)
+    response.raise_for_status()
+    return States.MAIN_MENU
+
+
+
+def button(update, context):
+    q = update.callback_query
+    q.answer()
+    if q.data == 'Like':
+        return like
+    elif q.data == 'Dislike':
+        pass
+    elif q.data == 'Categories_menu':
+        return start
 
 if __name__ == '__main__':
     env = environs.Env()
@@ -397,18 +449,10 @@ if __name__ == '__main__':
                 ),
                 MessageHandler(
                     Filters.text, show_recipe
-                )
+                ),
             ],
             States.RECIPE: [
-                MessageHandler(
-                    Filters.text("Лайк"), show_recipe
-                ),
-                MessageHandler(
-                    Filters.text("Дизлайк"), show_recipe
-                ),
-                MessageHandler(
-                    Filters.text("Назад"), start
-                ),
+                CallbackQueryHandler(button)
             ]
         },
         fallbacks=[],
