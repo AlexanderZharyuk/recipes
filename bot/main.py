@@ -138,7 +138,7 @@ def get_user_fullname(update: Update, context: CallbackContext) -> States:
     if words_in_user_answer == 1 or words_in_user_answer > 2:
         update.message.reply_text(dedent("""\
         Некорректный ввод. Может вы забыли указать фамилию?
-        
+
         Попробуйте еще раз:
         """))
         return States.START_REGISTRATION
@@ -258,6 +258,7 @@ def show_recipe(update: Update, context: CallbackContext) -> States:
     не покажется и бот уведомит об этом пользователя.
     """
     category = update.message.text
+    context.user_data["category"] = category
 
     url = "http://127.0.0.1:8000/api/category/recipes/"
     params = {
@@ -292,26 +293,43 @@ def show_recipe(update: Update, context: CallbackContext) -> States:
 
     random_recipe = random.choice(recipes_in_category["available_recipes"])
     recipe_name = random_recipe["recipe_name"]
+    context.user_data["recipe_name"] = recipe_name
     recipe_description = random_recipe["recipe_description"]
-    # TODO Использовать этот URL для отправки картинки пользователю
     recipe_photo_url = random_recipe["recipe_photo"]
+    response = requests.get(recipe_photo_url)
+    response.raise_for_status()
+
     recipe_ingredients = [
         f"- {ingredient}" for ingredient in random_recipe["recipe_ingredients"]
     ]
     formatted_ingredients = '\n'.join(recipe_ingredients)
 
     recipe_message = dedent(f"""\
-    <b>{recipe_name}</b>
-    
-    <b>Описание:</b>
-    {recipe_description} 
-    
-    <b> Ингредиенты: </b>
-    {formatted_ingredients} 
-    """).replace("  ", "")
+        {recipe_name}
 
-    # TODO Сделать клавиатуру Лайк/Дизлайк/Главное меню
-    update.message.reply_text(recipe_message, parse_mode=ParseMode.HTML)
+        <b>Описание:</b>
+        {recipe_description} 
+
+        <b> Ингредиенты: </b>
+        {formatted_ingredients} 
+        """).replace("  ", "")
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Лайк", callback_data="like"),
+            InlineKeyboardButton("Дизлайк", callback_data="dislike"),
+        ],
+        [
+            InlineKeyboardButton("Главное меню", callback_data="main_menu")
+        ]
+    ]
+    markup = InlineKeyboardMarkup(keyboard)
+
+    context.user_data["telegram_id"] = update.message.from_user.id
+    update.message.reply_photo(response.content,
+                               caption=recipe_message,
+                               reply_markup=markup,
+                               parse_mode=ParseMode.HTML)
     return States.RECIPE
 
 
@@ -328,8 +346,11 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
     if response.ok:
         recipe = response.json()
         recipe_name = recipe["recipe_name"]
+        context.user_data["recipe_name"] = recipe_name
         recipe_description = recipe["recipe_description"]
-        recipe_image = recipe["recipe_image"]
+        recipe_photo_url = recipe["recipe_image"]
+        response = requests.get(recipe_photo_url)
+        response.raise_for_status()
         recipe_ingredients = [
             f"- {ingredient}" for ingredient in
             recipe["recipe_ingredients"]
@@ -338,10 +359,10 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
 
         recipe_message = dedent(f"""\
         <b>{recipe_name}</b>
-    
+
         <b>Описание:</b>
         {recipe_description} 
-        
+
         <b> Ингредиенты: </b>
         {formatted_ingredients} 
         """).replace("  ", "")
@@ -358,11 +379,10 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
         markup = InlineKeyboardMarkup(keyboard)
 
         context.user_data["telegram_id"] = update.message.from_user.id
-        update.message.reply_text(
-            recipe_message,
-            parse_mode=ParseMode.HTML,
-            reply_markup=markup
-        )
+        update.message.reply_photo(response.content,
+                                   caption=recipe_message,
+                                   reply_markup=markup,
+                                   parse_mode=ParseMode.HTML)
         return States.RECIPE
 
     message_keyboard = [["Назад", "Главное меню"]]
@@ -375,44 +395,75 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
     )
     return States.CATEGORY
 
-
-def dislike_recipe(update: Update, context: CallbackContext) -> States:
+def like_recipe(update: Update, context: CallbackContext) -> States:
     """
-    Если пользователь нажал на дизлайк - выдаем новый рецепт
+    Если пользователь нажал на лайк - рецепт отправляется в личный кобинет на хранение. А в замен появляется новый рецепт
     """
     query = update.callback_query
     query.answer()
 
-    url = "http://127.0.0.1:8000/api/recipe/random/"
+    url = "http://127.0.0.1:8000/api/favourites/add"
+    recipe_name = context.user_data["recipe_name"]
+    payload = {
+        'user_tg_id': context.user_data["telegram_id"],
+        'recipe_name': recipe_name
+    }
+    response = requests.post(url, data=payload)
+    response.raise_for_status()
+
+    category = context.user_data["category"]
+    url = "http://127.0.0.1:8000/api/category/recipes/"
     params = {
-        "telegram_id": context.user_data.get("telegram_id")
+        "category": category,
+        "telegram_id": context.user_data["telegram_id"]
     }
     response = requests.get(url, params=params)
+    if not response.ok:
+        message_keyboard = [["Назад", "Главное меню"]]
+        markup = ReplyKeyboardMarkup(message_keyboard,
+                                     resize_keyboard=True,
+                                     one_time_keyboard=True)
+        error_message = dedent("""\
+        Подобная категория не найдена.
+        """)
+        query.message.reply_text(error_message, reply_markup=markup)
+        return States.CATEGORY
 
-    if response.ok:
-        recipe = response.json()
-        recipe_name = recipe["recipe_name"]
-        recipe_description = recipe["recipe_description"]
-        recipe_image = recipe["recipe_image"]
-        recipe_ingredients = [
-            f"- {ingredient}" for ingredient in
-            recipe["recipe_ingredients"]
+    recipes_in_category = response.json()
+    if not recipes_in_category["available_recipes"]:
+        message_keyboard = [["Назад", "Главное меню"]]
+        markup = ReplyKeyboardMarkup(message_keyboard,
+                                     resize_keyboard=True,
+                                     one_time_keyboard=True)
+        info_message = dedent("""\
+            Вы уже посмотрели все рецепты в этой категории!
+            """)
+        query.message.reply_text(info_message, reply_markup=markup)
+        return States.CATEGORY
+
+    random_recipe = random.choice(recipes_in_category["available_recipes"])
+    recipe_name = random_recipe["recipe_name"]
+    context.user_data["recipe_name"] = recipe_name
+    recipe_description = random_recipe["recipe_description"]
+    recipe_photo_url = random_recipe["recipe_photo"]
+    response = requests.get(recipe_photo_url)
+    response.raise_for_status()
+
+    recipe_ingredients = [
+            f"- {ingredient}" for ingredient in random_recipe["recipe_ingredients"]
         ]
-        formatted_ingredients = '\n'.join(recipe_ingredients)
+    formatted_ingredients = '\n'.join(recipe_ingredients)
 
-        recipe_message = dedent(f"""\
-        ВЫ НАЖАЛИ НА ДИЗЛАЙК
-        
-        <b>{recipe_name}</b>
+    recipe_message = dedent(f"""\
+                {recipe_name}
 
-        <b>Описание:</b>
-        {recipe_description} 
+                <b>Описание:</b>
+                {recipe_description} 
 
-        <b> Ингредиенты: </b>
-        {formatted_ingredients} 
-        """).replace("  ", "")
-
-        keyboard = [
+                <b> Ингредиенты: </b>
+                {formatted_ingredients} 
+                """).replace("  ", "")
+    keyboard = [
             [
                 InlineKeyboardButton("Лайк", callback_data="like"),
                 InlineKeyboardButton("Дизлайк", callback_data="dislike"),
@@ -421,15 +472,92 @@ def dislike_recipe(update: Update, context: CallbackContext) -> States:
                 InlineKeyboardButton("Главное меню", callback_data="main_menu")
             ]
         ]
-        markup = InlineKeyboardMarkup(keyboard)
+    markup = InlineKeyboardMarkup(keyboard)
 
-        query.message.edit_text(
-            recipe_message,
-            reply_markup=markup,
-            parse_mode=ParseMode.HTML
-        )
-        return States.RECIPE
+    query.message.reply_photo(response.content,
+                                   caption=recipe_message,
+                                   reply_markup=markup,
+                                   parse_mode=ParseMode.HTML)
+    return States.RECIPE
 
+
+def dislike_recipe(update: Update, context: CallbackContext) -> States:
+    """
+    Если пользователь нажал на дизлайк - выдаем новый рецепт
+    """
+    query = update.callback_query
+    query.answer()
+
+    category = context.user_data["category"]
+    url = "http://127.0.0.1:8000/api/category/recipes/"
+    params = {
+        "category": category,
+        "telegram_id": context.user_data["telegram_id"]
+    }
+    response = requests.get(url, params=params)
+    if not response.ok:
+        message_keyboard = [["Назад", "Главное меню"]]
+        markup = ReplyKeyboardMarkup(message_keyboard,
+                                     resize_keyboard=True,
+                                     one_time_keyboard=True)
+        error_message = dedent("""\
+            Подобная категория не найдена.
+            """)
+        query.message.reply_text(error_message, reply_markup=markup)
+        return States.CATEGORY
+
+    recipes_in_category = response.json()
+    if not recipes_in_category["available_recipes"]:
+        message_keyboard = [["Назад", "Главное меню"]]
+        markup = ReplyKeyboardMarkup(message_keyboard,
+                                     resize_keyboard=True,
+                                     one_time_keyboard=True)
+        info_message = dedent("""\
+                Вы уже посмотрели все рецепты в этой категории!
+                """)
+        query.message.reply_text(info_message, reply_markup=markup)
+        return States.CATEGORY
+
+    random_recipe = random.choice(recipes_in_category["available_recipes"])
+    recipe_name = random_recipe["recipe_name"]
+    context.user_data["recipe_name"] = recipe_name
+    recipe_description = random_recipe["recipe_description"]
+    recipe_photo_url = random_recipe["recipe_photo"]
+    response = requests.get(recipe_photo_url)
+    response.raise_for_status()
+
+    recipe_ingredients = [
+        f"- {ingredient}" for ingredient in random_recipe["recipe_ingredients"]
+    ]
+    formatted_ingredients = '\n'.join(recipe_ingredients)
+
+    recipe_message = dedent(f"""\
+                    ВЫ НАЖАЛИ ДИЗЛАЙК
+                    
+                    {recipe_name}
+
+                    <b>Описание:</b>
+                    {recipe_description} 
+
+                    <b> Ингредиенты: </b>
+                    {formatted_ingredients} 
+                    """).replace("  ", "")
+    keyboard = [
+        [
+            InlineKeyboardButton("Лайк", callback_data="like"),
+            InlineKeyboardButton("Дизлайк", callback_data="dislike"),
+        ],
+        [
+            InlineKeyboardButton("Главное меню", callback_data="main_menu")
+        ]
+    ]
+    markup = InlineKeyboardMarkup(keyboard)
+
+    query.message.reply_photo(response.content,
+                              caption=recipe_message,
+                              reply_markup=markup,
+                              parse_mode=ParseMode.HTML)
+    return States.RECIPE
 
 if __name__ == '__main__':
     env = environs.Env()
@@ -491,6 +619,9 @@ if __name__ == '__main__':
                 )
             ],
             States.RECIPE: [
+                CallbackQueryHandler(
+                    like_recipe, pattern="like"
+                ),
                 CallbackQueryHandler(
                     dislike_recipe, pattern="dislike"
                 ),
