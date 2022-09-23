@@ -23,53 +23,22 @@ def get_favorite_recipes(update: Update, context: CallbackContext) -> States:
     """
     telegram_id = update.message.from_user.id
     params = {
-        'user_telegram_id': telegram_id
+        "user_telegram_id": telegram_id
     }
 
-    # url = "http://127.0.0.1:8000/api/favourites/"
-    # favorite_recipes = requests.get(url=url, params=params)
-    # recipes = favorite_recipes.get('recipes')
-    favorite_recipes = 1
-    recipes = [['sfdsfds', 'ssssvv']]
+    url = "http://127.0.0.1:8000/api/favourites/"
+    response = requests.get(url=url, params=params)
 
-    if favorite_recipes.ok:
-        message_keyboard = [recipes]
+    if response.ok:
+        message_keyboard = [response.json()['favourite_recipes']]
         markup = ReplyKeyboardMarkup(
             message_keyboard,
             resize_keyboard=True,
             one_time_keyboard=True)
-        update.message.reply_text(reply_markup=markup)
+        update.message.reply_text(text='Ваши предпочтения', reply_markup=markup)
         return States.USER_RECIPE
     else:
         update.message.reply_text('У вас отсутствуют избранные рецепты')
-
-
-def show_recipe(update: Update, context: CallbackContext) -> States:
-    """
-    Показывает описание выбранного рецепта с картинкой
-    """
-    pass
-    # response = requests.get()
-
-    # recipe = {
-    #     "name": "Салат с красной фасолью консервированной и курицей",
-    #     "category": "Диетическая",
-    #     "image": dish_img,
-    #     "description": dish_description
-    # }
-    # message_keyboard = [['Назад', 'Главное меню']]
-    # markup = ReplyKeyboardMarkup(message_keyboard,
-    #                              resize_keyboard=True,
-    #                              one_time_keyboard=True)
-    # menu_msg = dedent(f"""
-    # Наименование:
-    #     {recipe.get('name')},
-    # Категория:
-    #     {recipe.get('category')},
-    # Приготовление:
-    #     {recipe.get('description')},
-    # """)
-    # update.message.
 
 
 if __name__ == '__main__':
