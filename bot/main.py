@@ -275,14 +275,11 @@ def show_recipe(update: Update, context: CallbackContext) -> States:
 
     random_recipe = random.choice(recipes_in_category["available_recipes"])
     recipe_name = random_recipe["recipe_name"]
+    context.user_data["recipe_name"] = recipe_name
     recipe_description = random_recipe["recipe_description"]
-    # TODO Использовать этот URL для отправки картинки пользователю
     recipe_photo_url = random_recipe["recipe_photo"]
     response = requests.get(recipe_photo_url)
     response.raise_for_status()
-    # with open('recipe_image.jpg', 'wb') as file:
-    #     file.write(response.content)
-    # recipe_image = open('recipe_image.jpg', 'wb').read()
 
     recipe_ingredients = [
         f"- {ingredient}" for ingredient in random_recipe["recipe_ingredients"]
@@ -371,7 +368,7 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
 
 def like(update: Update, context: CallbackContext) -> States:
     url = "http://127.0.0.1:8000/api/favourites/add/"
-    recipe_name = ''
+    recipe_name = context.user_data["recipe_name"]
     payload = {
         'user_tg_id': update.message.from_user.id,
         'recipe_name': recipe_name
@@ -380,7 +377,8 @@ def like(update: Update, context: CallbackContext) -> States:
     response.raise_for_status()
     return States.MAIN_MENU
 
-
+def dislike(update: Update, context: CallbackContext) -> States:
+    pass
 
 def button(update, context):
     q = update.callback_query
@@ -388,7 +386,7 @@ def button(update, context):
     if q.data == 'Like':
         return like
     elif q.data == 'Dislike':
-        pass
+        return dislike
     elif q.data == 'Categories_menu':
         return start
 
