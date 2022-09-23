@@ -559,6 +559,29 @@ def dislike_recipe(update: Update, context: CallbackContext) -> States:
                               parse_mode=ParseMode.HTML)
     return States.RECIPE
 
+def get_favorite_recipes(update: Update, context: CallbackContext) -> States:
+    """
+    Отрисовываем клавиатуру с избранными рецптами пользователя
+    """
+    telegram_id = update.message.from_user.id
+    params = {
+        "user_telegram_id": telegram_id
+    }
+
+    url = "http://127.0.0.1:8000/api/favourites/"
+    response = requests.get(url=url, params=params)
+
+    if response.ok:
+        message_keyboard = [response.json()['favourite_recipes']]
+        markup = ReplyKeyboardMarkup(
+            message_keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=True)
+        update.message.reply_text(text='Ваши предпочтения', reply_markup=markup)
+        return States.USER_RECIPE
+    else:
+        update.message.reply_text('У вас отсутствуют избранные рецепты')
+
 if __name__ == '__main__':
     env = environs.Env()
     env.read_env()
