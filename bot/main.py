@@ -35,7 +35,14 @@ def start(update: Update, context: CallbackContext) -> States:
     Старт бота - если юзер есть в БД, то выкидываем в главное меню,
     иначе предлагаем принять оферту об обработке данных.
     """
-    telegram_id = update.message.from_user.id
+    given_callback = update.callback_query
+    if given_callback:
+        telegram_id = context.user_data["telegram_id"]
+        given_callback.answer()
+        given_callback.delete_message()
+    else:
+        telegram_id = update.message.from_user.id
+
     url = f"http://127.0.0.1:8000/api/users/{telegram_id}"
     response = requests.get(url)
 
@@ -43,14 +50,25 @@ def start(update: Update, context: CallbackContext) -> States:
         user = response.json()
         user_fullname = user["user_fullname"]
         message_keyboard = [["🍳 Рецепты", "🙇🏻 Личный кабинет"]]
-        markup = ReplyKeyboardMarkup(message_keyboard,
-                                     resize_keyboard=True,
-                                     one_time_keyboard=True)
+        markup = ReplyKeyboardMarkup(
+            message_keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=True)
         menu_msg = dedent(f"""\
         Здравствуй, {user_fullname}!
 
         Найдем новые рецепты или приготовим, что уже пробовали?
         """)
+
+        if given_callback:
+            context.bot.send_message(
+                text=menu_msg,
+                chat_id=given_callback.message.chat.id,
+                reply_markup=markup,
+                parse_mode=ParseMode.HTML
+            )
+            return States.MAIN_MENU
+
         update.message.reply_text(text=menu_msg, reply_markup=markup)
         return States.MAIN_MENU
 
@@ -70,11 +88,11 @@ def start(update: Update, context: CallbackContext) -> States:
 
     Это обязательная процедура, пожалуйста, ознакомьтесь с документом.
     """).replace("  ", "")
-    update.message.reply_document(user_agreement_pdf,
-                                  filename="Соглашение на обработку "
-                                           "персональных данных.pdf",
-                                  caption=greeting_msg,
-                                  reply_markup=markup)
+    update.message.reply_document(
+        user_agreement_pdf,
+        filename="Соглашение на обработку персональных данных.pdf",
+        caption=greeting_msg,
+        reply_markup=markup)
     return States.ACCEPT_PRIVACY
 
 
@@ -298,6 +316,9 @@ def show_recipe(update: Update, context: CallbackContext) -> States:
 
 
 def get_random_recipe(update: Update, context: CallbackContext) -> States:
+    """
+    Выдаем рандомный рецепт пользователю
+    """
     url = "http://127.0.0.1:8000/api/recipe/random/"
     params = {
         "telegram_id": update.message.from_user.id
@@ -325,9 +346,24 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
         {formatted_ingredients} 
         """).replace("  ", "")
 
-        # TODO Сделать клавиатуру Лайк/Дизлайк/Главное меню
-        update.message.reply_text(recipe_message, parse_mode=ParseMode.HTML)
-        return
+        keyboard = [
+            [
+                InlineKeyboardButton("Лайк", callback_data="like"),
+                InlineKeyboardButton("Дизлайк", callback_data="dislike"),
+            ],
+            [
+                InlineKeyboardButton("Главное меню", callback_data="main_menu")
+            ]
+        ]
+        markup = InlineKeyboardMarkup(keyboard)
+
+        context.user_data["telegram_id"] = update.message.from_user.id
+        update.message.reply_text(
+            recipe_message,
+            parse_mode=ParseMode.HTML,
+            reply_markup=markup
+        )
+        return States.RECIPE
 
     message_keyboard = [["Назад", "Главное меню"]]
     markup = ReplyKeyboardMarkup(message_keyboard,
@@ -338,6 +374,61 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
         reply_markup=markup
     )
     return States.CATEGORY
+
+
+def dislike_recipe(update: Update, context: CallbackContext) -> States:
+    """
+    Если пользователь нажал на дизлайк - выдаем новый рецепт
+    """
+    query = update.callback_query
+    query.answer()
+
+    url = "http://127.0.0.1:8000/api/recipe/random/"
+    params = {
+        "telegram_id": context.user_data.get("telegram_id")
+    }
+    response = requests.get(url, params=params)
+
+    if response.ok:
+        recipe = response.json()
+        recipe_name = recipe["recipe_name"]
+        recipe_description = recipe["recipe_description"]
+        recipe_image = recipe["recipe_image"]
+        recipe_ingredients = [
+            f"- {ingredient}" for ingredient in
+            recipe["recipe_ingredients"]
+        ]
+        formatted_ingredients = '\n'.join(recipe_ingredients)
+
+        recipe_message = dedent(f"""\
+        ВЫ НАЖАЛИ НА ДИЗЛАЙК
+        
+        <b>{recipe_name}</b>
+
+        <b>Описание:</b>
+        {recipe_description} 
+
+        <b> Ингредиенты: </b>
+        {formatted_ingredients} 
+        """).replace("  ", "")
+
+        keyboard = [
+            [
+                InlineKeyboardButton("Лайк", callback_data="like"),
+                InlineKeyboardButton("Дизлайк", callback_data="dislike"),
+            ],
+            [
+                InlineKeyboardButton("Главное меню", callback_data="main_menu")
+            ]
+        ]
+        markup = InlineKeyboardMarkup(keyboard)
+
+        query.message.edit_text(
+            recipe_message,
+            reply_markup=markup,
+            parse_mode=ParseMode.HTML
+        )
+        return States.RECIPE
 
 
 if __name__ == '__main__':
@@ -400,15 +491,12 @@ if __name__ == '__main__':
                 )
             ],
             States.RECIPE: [
-                MessageHandler(
-                    Filters.text("Лайк"), show_recipe
+                CallbackQueryHandler(
+                    dislike_recipe, pattern="dislike"
                 ),
-                MessageHandler(
-                    Filters.text("Дизлайк"), show_recipe
-                ),
-                MessageHandler(
-                    Filters.text("Назад"), start
-                ),
+                CallbackQueryHandler(
+                    start, pattern="main_menu"
+                )
             ]
         },
         fallbacks=[],
