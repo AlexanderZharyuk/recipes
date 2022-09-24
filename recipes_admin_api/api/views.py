@@ -156,7 +156,7 @@ def get_recipe(request) -> JsonResponse:
         'recipe_description': recipe.description,
         'recipe_image': request.build_absolute_uri(recipe.image.url),
         'recipe_ingredients': [
-                item.ingredient.name for item
+                [item.ingredient.name, item.quantity] for item
                 in recipe.ingredients.all()
             ],
     }
@@ -192,7 +192,10 @@ def get_random_recipe(request) -> JsonResponse:
             'recipe_description': random_recipe.description,
             'recipe_image': request.build_absolute_uri(random_recipe.image.url),
             'recipe_ingredients': [
-                item.ingredient.name for item
+                [
+                    item.ingredient.name,
+
+                ] for item
                 in random_recipe.ingredients.all()
             ],
         }
