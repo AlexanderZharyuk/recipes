@@ -156,9 +156,10 @@ def get_recipe(request) -> JsonResponse:
         'recipe_description': recipe.description,
         'recipe_image': request.build_absolute_uri(recipe.image.url),
         'recipe_ingredients': [
-                [item.ingredient.name, item.quantity] for item
-                in recipe.ingredients.all()
-            ],
+            [item.ingredient.name, item.quantity]
+            for item
+            in recipe.ingredients.all()
+        ],
     }
     return JsonResponse(
         response,
