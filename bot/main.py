@@ -2,7 +2,6 @@ import random
 import logging
 
 from textwrap import dedent
-from enum import Enum, auto
 
 import environs
 import requests
@@ -16,18 +15,9 @@ from telegram.ext import (CallbackQueryHandler, CallbackContext,
 from telegram import ParseMode
 from more_itertools import chunked
 
-
-class States(Enum):
-    ACCEPT_PRIVACY = auto()
-    START_REGISTRATION = auto()
-    USER_FULLNAME = auto()
-    USER_PHONE_NUMBER = auto()
-    MAIN_MENU = auto()
-    CATEGORY = auto()
-    RECIPE = auto()
-    USER_RECIPES = auto()
-    FAVORITE_RECIPE = auto()
-
+from bot.personal_account import get_favorite_recipes, \
+    show_favorite_recipe
+from bot.states import States
 
 logger = logging.getLogger(__name__)
 
@@ -706,92 +696,7 @@ def dislike_recipe(update: Update, context: CallbackContext) -> States:
     return States.RECIPE
 
 
-def get_favorite_recipes(update: Update, context: CallbackContext) -> States:
-    """
-    Отрисовываем клавиатуру с избранными рецптами пользователя
-    """
-    telegram_id = update.message.from_user.id
 
-    params = {
-        "user_telegram_id": telegram_id
-    }
-    url = "http://127.0.0.1:8000/api/favourites/"
-    response = requests.get(url=url, params=params)
-
-    favourite_recipes = response.json()['favourite_recipes']
-    keyboard = favourite_recipes + ['Главное меню']
-    message_keyboard = list(
-        chunked(keyboard, 2)
-    )
-
-    markup = ReplyKeyboardMarkup(
-        message_keyboard,
-        resize_keyboard=True,
-        one_time_keyboard=True
-    )
-    if not favourite_recipes:
-        update.message.reply_text(
-            text='У вас отсутствуют избранные рецепты',
-            reply_markup=markup
-        )
-        return States.USER_RECIPES
-
-    update.message.reply_text(
-        text='Ваши предпочтения',
-        reply_markup=markup
-    )
-    return States.USER_RECIPES
-
-
-def show_favorite_recipe(update: Update, context: CallbackContext) -> States:
-    """
-    Показывает описание выбранного рецепта с картинкой
-    """
-    recipe_name = update.message.text
-    url = 'http://127.0.0.1:8000/api/recipe/'
-    params = {
-        "recipe_name": recipe_name
-    }
-    response = requests.get(url, params=params)
-
-    if response.ok:
-        recipe = response.json()
-        ingredients = recipe.get('recipe_ingredients')
-        parsed_ingredients = ""
-        for ingredient in ingredients:
-            parsed_ingredients += \
-                f"{' - '.join([str(item) for item in ingredient])} грамм\n"
-
-        menu_msg = dedent(f"""\
-            <b>{recipe.get('recipe_name')}</b>
-
-            <b>Ингредиенты:</b>
-            {parsed_ingredients}
-            <b>Приготовление:</b>
-            {recipe.get('recipe_description')}
-            """).replace("    ", "")
-
-        message_keyboard = [
-            [
-                "Назад",
-                "Главное меню"
-            ]
-        ]
-        markup = ReplyKeyboardMarkup(
-            message_keyboard,
-            resize_keyboard=True,
-            one_time_keyboard=True
-        )
-        recipe_img = requests.get(recipe['recipe_image'])
-        update.message.reply_photo(
-            recipe_img.content,
-            caption=menu_msg,
-            reply_markup=markup,
-            parse_mode=ParseMode.HTML
-        )
-    else:
-        update.message.reply_text('Такого рецепта нет 😥')
-    return States.FAVORITE_RECIPE
 
 
 if __name__ == '__main__':
