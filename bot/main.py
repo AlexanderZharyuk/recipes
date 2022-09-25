@@ -711,17 +711,19 @@ def get_favorite_recipes(update: Update, context: CallbackContext) -> States:
     Отрисовываем клавиатуру с избранными рецптами пользователя
     """
     telegram_id = update.message.from_user.id
+
     params = {
         "user_telegram_id": telegram_id
     }
     url = "http://127.0.0.1:8000/api/favourites/"
     response = requests.get(url=url, params=params)
-    favourite_recipes = response.json()['favourite_recipes']
 
-    message_keyboard = [
-        favourite_recipes,
-        ['Главное меню']
-    ]
+    favourite_recipes = response.json()['favourite_recipes']
+    keyboard = favourite_recipes + ['Главное меню']
+    message_keyboard = list(
+        chunked(keyboard, 2)
+    )
+
     markup = ReplyKeyboardMarkup(
         message_keyboard,
         resize_keyboard=True,
@@ -775,9 +777,11 @@ def show_favorite_recipe(update: Update, context: CallbackContext) -> States:
                 "Главное меню"
             ]
         ]
-        markup = ReplyKeyboardMarkup(message_keyboard,
-                                     resize_keyboard=True,
-                                     one_time_keyboard=True)
+        markup = ReplyKeyboardMarkup(
+            message_keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
         recipe_img = requests.get(recipe['recipe_image'])
         update.message.reply_photo(
             recipe_img.content,
