@@ -718,11 +718,6 @@ def get_favorite_recipes(update: Update, context: CallbackContext) -> States:
     response = requests.get(url=url, params=params)
     favourite_recipes = response.json()['favourite_recipes']
 
-    if not favourite_recipes:
-        # TODO Добавить кнопку назад
-        update.message.reply_text('У вас отсутствуют избранные рецепты')
-        return States.USER_RECIPES
-
     message_keyboard = [
         favourite_recipes,
         ['Главное меню']
@@ -732,6 +727,13 @@ def get_favorite_recipes(update: Update, context: CallbackContext) -> States:
         resize_keyboard=True,
         one_time_keyboard=True
     )
+    if not favourite_recipes:
+        update.message.reply_text(
+            text='У вас отсутствуют избранные рецепты',
+            reply_markup=markup
+        )
+        return States.USER_RECIPES
+
     update.message.reply_text(
         text='Ваши предпочтения',
         reply_markup=markup
