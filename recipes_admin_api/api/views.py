@@ -148,6 +148,7 @@ def get_recipe(request) -> JsonResponse:
         'recipe_name': recipe_name
     }
     """
+    # TODO пределать вьюху - если нет в избранном у пользователя, то ошибка
     recipe_name = request.GET.get('recipe_name')
     recipe = Recipe.objects.get(name=recipe_name)
 
