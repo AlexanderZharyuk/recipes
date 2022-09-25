@@ -7,17 +7,18 @@ import environs
 import requests
 
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, Update,
-                      ReplyKeyboardMarkup, KeyboardButton)
+                      ReplyKeyboardMarkup, KeyboardButton, ParseMode)
 from telegram.ext import (CallbackQueryHandler, CallbackContext,
                           CommandHandler, ConversationHandler,
                           MessageHandler, Filters, Updater)
 
 
 class States(Enum):
-    USER_RECIPE = auto()
+    USER_RECIPES = auto()
+    FAVORITE_RECIPE = auto()
 
 
-def get_favorite_recipes(update: Update, context: CallbackContext) -> States:
+def get_favorite_recipes_markup(update: Update, context: CallbackContext) -> States:
     """
     Отрисовываем клавиатуру с избранными рецптами пользователя
     """
@@ -36,9 +37,54 @@ def get_favorite_recipes(update: Update, context: CallbackContext) -> States:
             resize_keyboard=True,
             one_time_keyboard=True)
         update.message.reply_text(text='Ваши предпочтения', reply_markup=markup)
-        return States.USER_RECIPE
     else:
         update.message.reply_text('У вас отсутствуют избранные рецепты')
+    return States.USER_RECIPES
+
+
+def show_favorite_recipe(update: Update, context: CallbackContext) -> States:
+    """
+    Показывает описание выбранного рецепта с картинкой
+    """
+    recipe_name = update.message.text
+    print(recipe_name)
+    url = 'http://127.0.0.1:8000/api/recipe/'
+    params = {
+        "recipe_name": recipe_name
+    }
+    response = requests.get(url, params=params)
+
+    if response.ok:
+        recipe = response.json()
+        menu_msg = dedent(f"""\
+            <b>{recipe.get('recipe_name')}</b>
+            
+            <b>Ингредиенты:</b>
+            {recipe.get('recipe_ingredients')},
+            
+            <b>Приготовление:</b>
+            {recipe.get('recipe_description')},
+            """).replace("    ", "")
+
+        keyboard = [
+            [
+                InlineKeyboardButton("Назад", callback_data="back"),
+            ],
+            [
+                InlineKeyboardButton("Главное меню", callback_data="main_menu")
+            ]
+        ]
+        markup = InlineKeyboardMarkup(keyboard)
+        recipe_img = requests.get(recipe['recipe_image'])
+        update.message.reply_photo(
+            recipe_img.content,
+            caption=menu_msg,
+            reply_markup=markup,
+            parse_mode=ParseMode.HTML
+        )
+    else:
+        update.message.reply_text('Такого рецепта нет 😥')
+    return States.USER_RECIPES
 
 
 if __name__ == '__main__':
@@ -55,12 +101,20 @@ if __name__ == '__main__':
     dispatcher = updater.dispatcher
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", get_favorite_recipes)],
+        entry_points=[CommandHandler("start", get_favorite_recipes_markup)],
         states={
-            States.USER_RECIPE: [
+            States.USER_RECIPES: [
                 MessageHandler(
-                    Filters.text, show_recipe
+                    Filters.text, show_favorite_recipe
                 )
+            ],
+            States.FAVORITE_RECIPE: [
+                CallbackQueryHandler(
+                    show_favorite_recipe, pattern="back"
+                ),
+                CallbackQueryHandler(
+                    show_favorite_recipe, pattern="main_menu"
+                ),
             ]
         },
         fallbacks=[],
