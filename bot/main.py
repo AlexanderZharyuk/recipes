@@ -15,7 +15,7 @@ from telegram.ext import (CallbackQueryHandler, CallbackContext,
 from telegram import ParseMode
 from more_itertools import chunked
 
-from bot.personal_account import get_favorite_recipes, \
+from bot.personal_account import show_favorite_recipes_markup, \
     show_favorite_recipe
 from bot.states import States
 
@@ -171,7 +171,8 @@ def get_user_phone_number(update: Update, context: CallbackContext) -> States:
     перекидываем в главное меню
     """
     if update.message.contact:
-        context.user_data["phone_number"] = update.message.contact.phone_number
+        context.user_data[
+            "phone_number"] = update.message.contact.phone_number
     else:
         phone_number = phonenumbers.parse(update.message.text, "RU")
         if not phonenumbers.is_valid_number(phone_number):
@@ -298,7 +299,8 @@ def show_recipe(update: Update, context: CallbackContext) -> States:
     response.raise_for_status()
 
     recipe_ingredients = [
-        f"- {ingredient}" for ingredient in random_recipe["recipe_ingredients"]
+        f"- {ingredient}" for ingredient in
+        random_recipe["recipe_ingredients"]
     ]
     formatted_ingredients = '\n'.join(recipe_ingredients)
 
@@ -374,7 +376,8 @@ def get_random_recipe(update: Update, context: CallbackContext) -> States:
                 InlineKeyboardButton("Дизлайк", callback_data="dislike"),
             ],
             [
-                InlineKeyboardButton("Главное меню", callback_data="main_menu")
+                InlineKeyboardButton("Главное меню",
+                                     callback_data="main_menu")
             ]
         ]
         markup = InlineKeyboardMarkup(keyboard)
@@ -523,7 +526,8 @@ def like_recipe(update: Update, context: CallbackContext) -> States:
     response.raise_for_status()
 
     recipe_ingredients = [
-        f"- {ingredient}" for ingredient in random_recipe["recipe_ingredients"]
+        f"- {ingredient}" for ingredient in
+        random_recipe["recipe_ingredients"]
     ]
     formatted_ingredients = '\n'.join(recipe_ingredients)
 
@@ -556,7 +560,6 @@ def like_recipe(update: Update, context: CallbackContext) -> States:
         parse_mode=ParseMode.HTML
     )
     return States.RECIPE
-
 
 
 def dislike_recipe(update: Update, context: CallbackContext) -> States:
@@ -662,7 +665,8 @@ def dislike_recipe(update: Update, context: CallbackContext) -> States:
     response.raise_for_status()
 
     recipe_ingredients = [
-        f"- {ingredient}" for ingredient in random_recipe["recipe_ingredients"]
+        f"- {ingredient}" for ingredient in
+        random_recipe["recipe_ingredients"]
     ]
     formatted_ingredients = '\n'.join(recipe_ingredients)
 
@@ -694,9 +698,6 @@ def dislike_recipe(update: Update, context: CallbackContext) -> States:
                               reply_markup=markup,
                               parse_mode=ParseMode.HTML)
     return States.RECIPE
-
-
-
 
 
 if __name__ == '__main__':
@@ -741,7 +742,7 @@ if __name__ == '__main__':
                     Filters.text("🍳 Рецепты"), get_categories
                 ),
                 MessageHandler(
-                    Filters.text("🙇🏻 Личный кабинет"), get_favorite_recipes
+                    Filters.text("🙇🏻 Личный кабинет"), show_favorite_recipes_markup
                 )
             ],
             States.CATEGORY: [
@@ -782,7 +783,7 @@ if __name__ == '__main__':
                     Filters.text("Главное меню"), start
                 ),
                 MessageHandler(
-                    Filters.text("Назад"), get_favorite_recipes
+                    Filters.text("Назад"), show_favorite_recipes_markup
                 ),
             ]
         },

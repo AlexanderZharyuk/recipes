@@ -11,9 +11,12 @@ from bot.states import States
 class ButtonName:
     MAIN_MENU = "Главное меню"
     BACK = "Назад"
-    
 
-def get_menu_message(ingredients: list, recipe: dict) -> str:
+
+def get_ingredient_message(ingredients: list, recipe: dict) -> str:
+    """
+    Возвращает текст с ингредиентом с разметкой
+    """
     parsed_ingredients = ""
     for ingredient in ingredients:
         parsed_ingredients += \
@@ -27,11 +30,14 @@ def get_menu_message(ingredients: list, recipe: dict) -> str:
                 <b>Приготовление:</b>
                 {recipe.get("recipe_description")}
                 """).replace("    ", "")
-    
+
     return menu_message
 
 
-def get_favorite_recipes(telegram_id: int) -> dict:
+def get_favorite_recipes(telegram_id: int) -> requests.Response:
+    """
+    Получает список лайкнутых рецептов
+    """
     params = {
         "user_telegram_id": telegram_id
     }
@@ -39,7 +45,19 @@ def get_favorite_recipes(telegram_id: int) -> dict:
     response = requests.get(url=url, params=params)
     response.raise_for_status()
 
-    return response.json()
+    return response
+
+
+def get_recipe(recipe_name: str) -> requests.Response:
+    """
+    Получает рецепт
+    """
+    url = "http://127.0.0.1:8000/api/recipe/"
+    params = {
+        "recipe_name": recipe_name
+    }
+    response = requests.get(url, params=params)
+    return response
 
 
 def show_favorite_recipes_markup(
@@ -50,7 +68,7 @@ def show_favorite_recipes_markup(
     Отрисовываем клавиатуру с избранными рецптами пользователя
     """
     telegram_id = update.message.from_user.id
-    recipes = get_favorite_recipes(telegram_id)
+    recipes = get_favorite_recipes(telegram_id).json()
     favourite_recipes = recipes["favourite_recipes"]
     keyboard = favourite_recipes + [ButtonName.MAIN_MENU]
     message_keyboard = list(chunked(keyboard, 2))
@@ -79,16 +97,12 @@ def show_favorite_recipe(update: Update, context: CallbackContext) -> States:
     Показывает описание выбранного рецепта с картинкой
     """
     recipe_name = update.message.text
-    url = "http://127.0.0.1:8000/api/recipe/"
-    params = {
-        "recipe_name": recipe_name
-    }
-    response = requests.get(url, params=params)
+    response = get_recipe(recipe_name=recipe_name)
 
     if response.ok:
         recipe = response.json()
         ingredients = recipe.get("recipe_ingredients")
-        menu_message = get_menu_message(
+        menu_message = get_ingredient_message(
             recipe=recipe,
             ingredients=ingredients
         )
