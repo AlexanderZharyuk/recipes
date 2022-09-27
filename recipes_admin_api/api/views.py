@@ -1,12 +1,10 @@
 import random
 
-from textwrap import dedent
-
 from django.http.response import JsonResponse
 from django.core.exceptions import ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import User, Favourites, Category, Recipe
+from .models import User, Favourites, Category, Recipe, Dislike
 
 
 def get_user(request, telegram_id) -> JsonResponse:
@@ -51,6 +49,7 @@ def add_user(request) -> JsonResponse:
         )
 
         Favourites.objects.create(user=user)
+        Dislike.objects.create(user=user)
 
         response = {
             'status': 'true',
@@ -112,6 +111,8 @@ def get_recipes_in_category(request) -> JsonResponse:
 
     user = Favourites.objects.get(user__telegram_id=telegram_id)
     user_favourites = user.recipes.all()
+    dislike = Dislike.objects.get(user__telegram_id=telegram_id)
+    user_dislikes = dislike.recipes.all()
 
     available_recipes = [
         {
@@ -123,7 +124,8 @@ def get_recipes_in_category(request) -> JsonResponse:
                 in recipe.ingredients.all()
             ],
         }
-        for recipe in recipes if recipe not in user_favourites
+        for recipe in recipes if recipe not in user_favourites and
+                                 recipe not in user_dislikes
     ]
 
     if not available_recipes:
@@ -146,11 +148,21 @@ def get_recipe(request) -> JsonResponse:
     В виде пареметров нужно передать словарь:
     {
         'recipe_name': recipe_name
+        'tg_user_id': tg_user_id
     }
     """
-    # TODO пределать вьюху - если нет в избранном у пользователя, то ошибка
     recipe_name = request.GET.get('recipe_name')
+    tg_user_id = request.GET.get('tg_user_id')
     recipe = Recipe.objects.get(name=recipe_name)
+    user_favourites = User.objects.get(telegram_id=tg_user_id).favourites.\
+        first()
+
+    if recipe not in user_favourites.recipes.all():
+        return JsonResponse(
+            data={"status": "Not found error"},
+            status=502,
+            json_dumps_params={'ensure_ascii': False}
+        )
 
     response = {
         'recipe_name': recipe.name,
@@ -177,8 +189,10 @@ def get_random_recipe(request) -> JsonResponse:
     telegram_id = request.GET.get('telegram_id')
     user = Favourites.objects.get(user__telegram_id=telegram_id)
     user_favourites = user.recipes.all()
+    user = Dislike.objects.get(user__telegram_id=telegram_id)
+    user_dislikes = user.recipes.all()
 
-    available_recipes = list(set(recipes) - set(user_favourites))
+    available_recipes = list(set(recipes) - set(user_favourites) - set(user_dislikes))
     if not available_recipes:
         response = {
             'status': 'False',
@@ -257,3 +271,30 @@ def get_user_favourites(request) -> JsonResponse:
         status=200,
         json_dumps_params={'ensure_ascii': False}
     )
+
+
+@csrf_exempt
+def add_to_dislikes(request) -> JsonResponse:
+    """
+    Если пользователь дизлайкнул рецепт - добавляем его к нему в дизлайки
+    """
+    if request.method == 'POST':
+        user_telegram_id = request.POST.get('user_tg_id')
+        recipe_name = request.POST.get('recipe_name')
+
+        user = User.objects.get(telegram_id=user_telegram_id)
+        recipe = Recipe.objects.get(name=recipe_name)
+        user_dislikes = Dislike.objects.get(user=user)
+        user_dislikes.recipes.add(recipe)
+
+        response = {
+            'status': 'true',
+            'message': f'add recipe to user-{user_telegram_id} dislikes'
+        }
+        return JsonResponse(response, status=200)
+
+    response = {
+        'status': 'false',
+        'message': 'Not supported method'
+    }
+    return JsonResponse(response, status=501)

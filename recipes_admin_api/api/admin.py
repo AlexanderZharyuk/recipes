@@ -18,7 +18,7 @@ class RecipeAdmin(admin.ModelAdmin):
     inlines = [
         RecipeInline
     ]
-    filter_horizontal = ['favourite_in']
+    filter_horizontal = ['favourite_in', 'dislike']
 
 
 @admin.register(Ingredient)

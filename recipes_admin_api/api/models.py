@@ -40,6 +40,17 @@ class Favourites(models.Model):
         return f'{self.user.fullname}'
 
 
+class Dislike(models.Model):
+    user = models.ForeignKey(
+        User,
+        related_name='dislikes',
+        on_delete=models.CASCADE
+    )
+
+    def __str__(self):
+        return f'{self.user.fullname}'
+
+
 class Category(models.Model):
     name = models.CharField(
         max_length=30,
@@ -79,6 +90,12 @@ class Recipe(models.Model):
         verbose_name='В избранном',
         related_name='recipes',
         blank=True,
+    )
+    dislike = models.ManyToManyField(
+        Dislike,
+        verbose_name='Дизлайкнули',
+        related_name='recipes',
+        blank=True
     )
 
     class Meta:
