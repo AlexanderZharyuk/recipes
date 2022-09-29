@@ -1,32 +1,32 @@
-# recipes
-Телеграм-бот с рецептами
+#recipes
+Telegram bot with recipes
 
-## Предустановка
-Для того, чтобы запустить проект у себя, создайте `.env`-файл со следующими переменными окружения:
+## Setting up your development environment
+To run the project on your own, create a `.env` file with the following environment variables:
 ```text
 DJANGO_SECRET_KEY=<YOUR-DJANGO-SECRET-KEY>
-TELEGRAM_BOT_TOKEN=<YOUR-TELEGRAM-BOT-TOKEN> | Узнать можно создав бота в @BotFather
+TELEGRAM_BOT_TOKEN=<YOUR-TELEGRAM-BOT-TOKEN> | You can find out by creating a bot in @BotFather
 ```
 
-После чего установите зависимости:
+Then install the dependencies:
 ```shell
 pip install -r requirements.txt
 ```
 
-Выполните миграции для БД:
+Run database migrations:
 ```shell
 python3 recipes_admin_api/manage.py migrate
 ```
 
-## Запуск проекта
-Данный бот работает по API с внутренним сервисом, который запускается на Django, поэтому необходимо всегда запускать джанго проект для работы бота.
-Запуск происходит следующими командами:
+## Add recipes
+You can add recipes in admin-panel. Recipe inlcude name, category, description, image, ingredients.
+
+## Launch of the project
+This bot works via API with an internal service that runs on Django, so you must always run a django project for the bot to work.
+It starts with the following commands:
 ```shell
 python3 recipes_admin_api/manage.py runserver
 
 cd bot
 python3 main.py
 ```
-
-# Бизнес-логика бота
-![diagram (2)](https://user-images.githubusercontent.com/46388832/191375039-ce859da0-20be-463d-b127-a6c67136cb34.png)
