@@ -1,4 +1,4 @@
-#recipes
+# Recipes
 Telegram bot with recipes
 
 ## Setting up your development environment
